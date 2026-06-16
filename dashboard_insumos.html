@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Insumos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; font-size: 15px; line-height: 1.5; }
+
+  header { background: #fff; border-bottom: 0.5px solid #e0dfd8; padding: 14px 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  .header-title { font-size: 15px; font-weight: 500; color: #1a1a1a; }
+  .header-sub { font-size: 12px; color: #888; margin-top: 1px; }
+  .refresh-btn { font-size: 12px; padding: 6px 14px; border-radius: 8px; border: 0.5px solid #d0cfc7; background: transparent; color: #555; cursor: pointer; display: flex; align-items: center; gap: 6px; }
+  .refresh-btn:hover { background: #f0efea; }
+  .refresh-info { font-size: 11px; color: #aaa; margin-top: 2px; text-align: right; }
+
+  .main { max-width: 960px; margin: 0 auto; padding: 24px 20px 48px; }
+
+  .loading { text-align: center; padding: 4rem; color: #888; font-size: 14px; }
+  .error-box { padding: 1rem 1.25rem; background: #fef2f2; border-radius: 10px; color: #991b1b; font-size: 13px; margin-bottom: 1.5rem; border: 0.5px solid #fca5a5; }
+
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .metric-card { background: #fff; border-radius: 10px; padding: 16px; border: 0.5px solid #e8e7e0; }
+  .metric-label { font-size: 11px; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .metric-value { font-size: 24px; font-weight: 500; line-height: 1.1; }
+  .metric-value.danger { color: #b91c1c; }
+  .metric-value.ok { color: #166534; }
+  .metric-sub { font-size: 11px; color: #aaa; margin-top: 5px; }
+
+  .card { background: #fff; border: 0.5px solid #e8e7e0; border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  .card-title { font-size: 13px; font-weight: 500; color: #444; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .period-selector { display: flex; gap: 6px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+  .period-label { font-size: 11px; color: #999; text-transform: uppercase; letter-spacing: 0.04em; }
+  .period-btn { font-size: 12px; padding: 4px 10px; border-radius: 7px; border: 0.5px solid #d8d7d0; background: transparent; color: #666; cursor: pointer; transition: all 0.12s; }
+  .period-btn:hover { background: #f5f5f3; }
+  .period-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+
+  .badge { display: inline-block; font-size: 11px; padding: 2px 9px; border-radius: 6px; font-weight: 500; }
+  .badge-ok  { background: #dcfce7; color: #166534; }
+  .badge-warn { background: #fef3c7; color: #92400e; }
+  .badge-danger { background: #fee2e2; color: #991b1b; }
+  .badge-info { background: #dbeafe; color: #1e40af; }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 1rem; }
+  .tab { font-size: 12px; padding: 5px 14px; border-radius: 7px; border: 0.5px solid #d8d7d0; background: transparent; color: #666; cursor: pointer; }
+  .tab.active { background: #f5f5f3; color: #1a1a1a; font-weight: 500; border-color: #c8c7c0; }
+
+  .alert-list { display: flex; flex-direction: column; gap: 7px; max-height: 360px; overflow-y: auto; }
+  .alert-item { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-radius: 8px; background: #f9f8f6; font-size: 13px; }
+  .alert-name { color: #1a1a1a; font-weight: 500; }
+  .alert-meta { color: #999; font-size: 11px; margin-top: 2px; }
+
+  .var-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; }
+  .var-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; background: #f9f8f6; }
+  .var-name { font-size: 13px; color: #1a1a1a; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .var-bar-wrap { width: 60px; height: 5px; background: #e8e7e0; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+  .var-bar { height: 100%; border-radius: 3px; }
+  .var-pct { font-size: 12px; font-weight: 500; min-width: 52px; text-align: right; flex-shrink: 0; }
+  .increase { color: #b91c1c; }
+  .decrease { color: #166534; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+  .legend { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; color: #888; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+  @media (max-width: 640px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid-2 { grid-template-columns: 1fr; }
+    header { padding: 12px 16px; }
+    .main { padding: 16px 12px 40px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-title">Dashboard de insumos</div>
+    <div class="refresh-info" id="refreshInfo">—</div>
+  </div>
+  <button class="refresh-btn" onclick="reloadData()">
+    <span id="refreshIcon">↻</span> Actualizar datos
+  </button>
+</header>
+
+<div class="main" id="app">
+  <div class="loading" id="loadingMsg">Cargando datos desde Google Sheets...</div>
+</div>
+
+<script>
+Chart.register(ChartDataLabels);
+
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ92xXemJ1Gsvyp6OOoIs0E8iC315bftD2jo66bz-SYSi-gorvCHnbyIEsnFZuPUf3f29dV46W6N7D_/pub?gid=0&single=true&output=csv';
+
+let ALL_DATA = [];
+let PERIODOS = [];
+let currentMetricsPeriod = '';
+let currentAlertPeriod = '';
+let currentVarPeriod = '';
+let currentVarDir = 'up';
+let chartCob = null;
+let chartABC = null;
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  return lines.slice(1).map(line => {
+    const cols = [];
+    let cur = '', inQ = false;
+    for (let c of line) {
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { cols.push(cur); cur = ''; }
+      else cur += c;
+    }
+    cols.push(cur);
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (cols[i] || '').trim());
+    return obj;
+  }).filter(r => r['Periodo'] && r['Insumo']);
+}
+
+function parsePrice(str) {
+  if (!str) return null;
+  const n = parseFloat(str.replace(/[$\s.]/g, '').replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+
+function buildState(rows) {
+  const periodsSet = [...new Set(rows.map(r => r['Periodo']))].sort((a, b) => {
+    const [ma, ya] = a.split('/'); const [mb, yb] = b.split('/');
+    return (ya - yb) || (ma - mb);
+  });
+  PERIODOS = periodsSet;
+
+  const cob = {};
+  PERIODOS.forEach(p => {
+    const pRows = rows.filter(r => r['Periodo'] === p);
+    ['A', 'B', 'C', 'total'].forEach(cat => {
+      const subset = cat === 'total' ? pRows : pRows.filter(r => r['Categoria ABC'] === cat);
+      const nTot = subset.length;
+      const nAct = subset.filter(r => r['Actualizado'] === 'ACTUALIZADO').length;
+      if (!cob[cat]) cob[cat] = { act: [], nAct: [], nTot: [] };
+      cob[cat].act.push(nTot > 0 ? Math.round(nAct / nTot * 100) : 0);
+      cob[cat].nAct.push(nAct);
+      cob[cat].nTot.push(nTot);
+    });
+  });
+
+  const varMap = {};
+  PERIODOS.forEach((p, pi) => {
+    if (pi === 0) { varMap[p] = []; return; }
+    const prev = PERIODOS[pi - 1];
+    const currRows = rows.filter(r => r['Periodo'] === p);
+    const prevRows = rows.filter(r => r['Periodo'] === prev);
+    const items = [];
+    currRows.forEach(cr => {
+      const pr = prevRows.find(r => r['Insumo'] === cr['Insumo']);
+      if (!pr) return;
+      const pCurr = parsePrice(cr['Costo Final por Unidad '] || cr['Costo Final por Unidad']);
+      const pPrev = parsePrice(pr['Costo Final por Unidad '] || pr['Costo Final por Unidad']);
+      if (!pCurr || !pPrev || pPrev === 0) return;
+      const pct = (pCurr - pPrev) / pPrev * 100;
+      if (Math.abs(pct) < 0.05) return;
+      items.push({ insumo: cr['Insumo'], abc: cr['Categoria ABC'], pct, dir: pct > 0 ? 'up' : 'down' });
+    });
+    varMap[p] = items.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
+  });
+
+  return { cob, varMap };
+}
+
+function pidx(p) { return PERIODOS.indexOf(p); }
+
+function renderAll(rows) {
+  const { cob, varMap } = buildState(rows);
+  window._cob = cob;
+  window._varMap = varMap;
+
+  currentMetricsPeriod = PERIODOS[PERIODOS.length - 1];
+  currentAlertPeriod = PERIODOS[PERIODOS.length - 1];
+  currentVarPeriod = PERIODOS.slice(1)[PERIODOS.length - 2] || PERIODOS[PERIODOS.length - 1];
+
+  document.getElementById('app').innerHTML = `
+    <div class="period-selector" id="metricsPeriodSelector"></div>
+    <div class="metrics-grid" id="metricsGrid"></div>
+
+    <div class="card">
+      <div class="card-title">Cobertura de actualización por período</div>
+      <div style="position:relative;width:100%;height:240px;">
+        <canvas id="chartCobertura" role="img" aria-label="Cobertura por período"></canvas>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#1D9E75;"></div>Actualizado</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#B4B2A9;"></div>Desactualizado</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Cobertura por categoría ABC</div>
+      <div style="position:relative;width:100%;height:240px;">
+        <canvas id="chartABC" role="img" aria-label="Cobertura ABC por período"></canvas>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#E24B4A;"></div>A — críticos</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#185FA5;"></div>B</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#888780;"></div>C</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Insumos A sin actualizar</div>
+        <div class="period-selector" id="alertPeriodSelector"></div>
+        <div id="alertSummary" style="margin-bottom:10px;"></div>
+        <div class="alert-list" id="alertList"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Variaciones de precio</div>
+        <div class="tabs">
+          <button class="tab active" onclick="showVar('up',this)">Subas</button>
+          <button class="tab" onclick="showVar('down',this)">Bajas</button>
+        </div>
+        <div class="period-selector" id="varPeriodSelector"></div>
+        <div class="var-list" id="varList"></div>
+      </div>
+    </div>
+  `;
+
+  buildMetricsPeriodSelector();
+  buildMetrics();
+  buildAlertPeriodSelector();
+  renderAlerts(rows);
+  buildVarPeriodSelector();
+  renderVar();
+  buildCharts(cob);
+}
+
+function buildMetricsPeriodSelector() {
+  document.getElementById('metricsPeriodSelector').innerHTML =
+    '<span class="period-label">Período:</span>' +
+    PERIODOS.map(p => `<button class="period-btn${p === currentMetricsPeriod ? ' active' : ''}" onclick="setMetricsPeriod('${p}',this)">${p}</button>`).join('');
+}
+
+function setMetricsPeriod(p, el) {
+  currentMetricsPeriod = p;
+  document.querySelectorAll('#metricsPeriodSelector .period-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  buildMetrics();
+}
+
+function buildMetrics() {
+  const cob = window._cob;
+  const i = pidx(currentMetricsPeriod);
+  const prev = i > 0 ? i - 1 : null;
+  const actA = cob.A.act[i];
+  const nActA = cob.A.nAct[i];
+  const nTotA = cob.A.nTot[i];
+  const nDesA = nTotA - nActA;
+  const prevActA = prev !== null ? cob.A.act[prev] : null;
+  const diffA = prevActA !== null ? actA - prevActA : null;
+  const diffLabel = diffA !== null ? `${diffA >= 0 ? '+' : ''}${diffA}% vs ${PERIODOS[prev]}` : 'primer período';
+  const bestIdx = cob.A.act.indexOf(Math.max(...cob.A.act));
+
+  const cards = [
+    { label: 'Cobertura total', value: cob.total.act[i] + '%', cls: cob.total.act[i] >= 50 ? 'ok' : 'danger', sub: `${cob.total.nAct[i]} actualizados de ${cob.total.nTot[i]}` },
+    { label: 'Cobertura cat. A', value: actA + '%', cls: actA >= 60 ? 'ok' : 'danger', sub: diffLabel },
+    { label: 'Insumos A pendientes', value: `${nDesA} (${100 - actA}%)`, cls: (100 - actA) > 50 ? 'danger' : 'ok', sub: `${nActA} de ${nTotA} actualizados` },
+    { label: 'Mejor mes cat. A', value: Math.max(...cob.A.act) + '%', cls: '', sub: `${PERIODOS[bestIdx]} · ${cob.A.nAct[bestIdx]} insumos` },
+  ];
+
+  document.getElementById('metricsGrid').innerHTML = cards.map(c =>
+    `<div class="metric-card">
+      <div class="metric-label">${c.label} · ${currentMetricsPeriod}</div>
+      <div class="metric-value ${c.cls}">${c.value}</div>
+      <div class="metric-sub">${c.sub}</div>
+    </div>`
+  ).join('');
+}
+
+function buildAlertPeriodSelector() {
+  document.getElementById('alertPeriodSelector').innerHTML =
+    PERIODOS.map(p => `<button class="period-btn${p === currentAlertPeriod ? ' active' : ''}" onclick="setAlertPeriod('${p}',this)">${p}</button>`).join('');
+}
+
+function setAlertPeriod(p, el) {
+  currentAlertPeriod = p;
+  document.querySelectorAll('#alertPeriodSelector .period-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderAlerts(ALL_DATA);
+}
+
+function renderAlerts(rows) {
+  const cob = window._cob;
+  const i = pidx(currentAlertPeriod);
+  const nDes = cob.A.nTot[i] - cob.A.nAct[i];
+  const pctDes = 100 - cob.A.act[i];
+  document.getElementById('alertSummary').innerHTML =
+    `<div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <span class="badge badge-danger">${nDes} pendientes</span>
+      <span class="badge badge-warn">${pctDes}% del total A</span>
+      <span class="badge badge-ok">${cob.A.nAct[i]} actualizados</span>
+    </div>`;
+  const items = rows.filter(r => r['Periodo'] === currentAlertPeriod && r['Categoria ABC'] === 'A' && r['Actualizado'] === 'DESACTUALIZADO');
+  const list = document.getElementById('alertList');
+  if (!items.length) {
+    list.innerHTML = '<div style="color:#999;font-size:13px;padding:8px 0;">Todos los insumos A están actualizados ✓</div>';
+    return;
+  }
+  list.innerHTML = items.map(d =>
+    `<div class="alert-item">
+      <div>
+        <div class="alert-name">${d['Insumo']}</div>
+        <div class="alert-meta">${d['Proveedor'] || '—'}</div>
+      </div>
+      <span class="badge badge-danger">Pendiente</span>
+    </div>`
+  ).join('');
+}
+
+function buildVarPeriodSelector() {
+  const periods = PERIODOS.slice(1);
+  document.getElementById('varPeriodSelector').innerHTML =
+    periods.map(p => `<button class="period-btn${p === currentVarPeriod ? ' active' : ''}" onclick="setVarPeriod('${p}',this)">${p}</button>`).join('');
+}
+
+function setVarPeriod(p, el) {
+  currentVarPeriod = p;
+  document.querySelectorAll('#varPeriodSelector .period-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderVar();
+}
+
+function showVar(dir, el) {
+  currentVarDir = dir;
+  document.querySelectorAll('.tabs .tab').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderVar();
+}
+
+function renderVar() {
+  const varMap = window._varMap;
+  const items = (varMap[currentVarPeriod] || []).filter(d => d.dir === currentVarDir).slice(0, 10);
+  const list = document.getElementById('varList');
+  if (!items.length) {
+    list.innerHTML = '<div style="color:#999;font-size:13px;padding:8px 0;">Sin variaciones para este período.</div>';
+    return;
+  }
+  const maxAbs = Math.max(...items.map(d => Math.abs(d.pct)));
+  list.innerHTML = items.map(d => {
+    const pct = Math.abs(d.pct);
+    const barW = Math.min(100, Math.round(pct / maxAbs * 100));
+    const color = d.dir === 'up' ? '#E24B4A' : '#1D9E75';
+    const disp = pct > 999 ? Math.round(pct / 1000) + 'k%' : pct.toFixed(1) + '%';
+    return `<div class="var-item">
+      <span class="badge badge-info" style="font-size:10px;min-width:18px;text-align:center;">${d.abc}</span>
+      <span class="var-name">${d.insumo}</span>
+      <div class="var-bar-wrap"><div class="var-bar" style="width:${barW}%;background:${color};"></div></div>
+      <span class="var-pct ${d.dir === 'up' ? 'increase' : 'decrease'}">${d.dir === 'up' ? '+' : '-'}${disp}</span>
+    </div>`;
+  }).join('');
+}
+
+function buildCharts(cob) {
+  if (chartCob) chartCob.destroy();
+  if (chartABC) chartABC.destroy();
+
+  chartCob = new Chart(document.getElementById('chartCobertura'), {
+    type: 'bar',
+    data: {
+      labels: PERIODOS,
+      datasets: [
+        {
+          label: 'Actualizado', data: cob.total.act, backgroundColor: '#1D9E75', borderWidth: 0, borderRadius: 3,
+          datalabels: { anchor: 'center', align: 'center', color: '#fff', font: { size: 11, weight: '500' }, formatter: (v, ctx) => cob.total.nAct[ctx.dataIndex] + '\n' + v + '%' }
+        },
+        {
+          label: 'Desactualizado', data: cob.total.act.map((_, i) => 100 - cob.total.act[i]), backgroundColor: '#B4B2A9', borderWidth: 0, borderRadius: 3,
+          datalabels: { anchor: 'center', align: 'center', color: '#fff', font: { size: 11, weight: '500' }, formatter: (v, ctx) => { const i = ctx.dataIndex; return (cob.total.nTot[i] - cob.total.nAct[i]) + '\n' + (100 - cob.total.act[i]) + '%'; } }
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, datalabels: {} },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#888', font: { size: 11 } } },
+        y: { stacked: true, max: 100, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#888', font: { size: 11 }, callback: v => v + '%' } }
+      }
+    }
+  });
+
+  chartABC = new Chart(document.getElementById('chartABC'), {
+    type: 'line',
+    data: {
+      labels: PERIODOS,
+      datasets: [
+        { label: 'A', data: cob.A.act, borderColor: '#E24B4A', backgroundColor: 'rgba(226,75,74,0.08)', tension: 0.3, fill: false, pointRadius: 6, pointHoverRadius: 8, datalabels: { display: false } },
+        { label: 'B', data: cob.B.act, borderColor: '#185FA5', backgroundColor: 'rgba(24,95,165,0.08)', tension: 0.3, fill: false, pointRadius: 6, pointHoverRadius: 8, borderDash: [5, 3], datalabels: { display: false } },
+        { label: 'C', data: cob.C.act, borderColor: '#888780', backgroundColor: 'transparent', tension: 0.3, fill: false, pointRadius: 6, pointHoverRadius: 8, borderDash: [2, 2], datalabels: { display: false } }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        datalabels: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const i = ctx.dataIndex;
+              const cat = ctx.dataset.label;
+              const d = cob[cat];
+              return ` Cat. ${cat}: ${d.nAct[i]}/${d.nTot[i]} actualizados (${ctx.parsed.y}%)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#888', font: { size: 11 } } },
+        y: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { color: '#888', font: { size: 11 }, callback: v => v + '%' } }
+      }
+    }
+  });
+}
+
+async function reloadData() {
+  const icon = document.getElementById('refreshIcon');
+  if (icon) icon.textContent = '⏳';
+  try {
+    const res = await fetch(CSV_URL + '&t=' + Date.now());
+    const text = await res.text();
+    ALL_DATA = parseCSV(text);
+    const now = new Date().toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('refreshInfo').textContent = 'Actualizado: ' + now;
+    renderAll(ALL_DATA);
+  } catch (e) {
+    if (icon) icon.textContent = '↻';
+    alert('No se pudo conectar con Google Sheets. Verificá tu conexión a internet.');
+  }
+}
+
+(async () => {
+  try {
+    const res = await fetch(CSV_URL + '&t=' + Date.now());
+    const text = await res.text();
+    ALL_DATA = parseCSV(text);
+    const now = new Date().toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('refreshInfo').textContent = 'Actualizado: ' + now;
+    renderAll(ALL_DATA);
+  } catch (e) {
+    document.getElementById('app').innerHTML = `
+      <div class="error-box">
+        No se pudo cargar la planilla. Verificá que esté publicada como CSV y que tengas conexión a internet.<br>
+        <small style="opacity:0.7;margin-top:4px;display:block;">${e.message}</small>
+      </div>`;
+  }
+})();
+</script>
+</body>
+</html>
